@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
-// TripsTable no longer used — replaced with inline editable cards
 import { useInsertTrips } from "@/hooks/useTrips";
 import { useDrivers, useInsertDriver } from "@/hooks/useDrivers";
 import {
@@ -23,42 +22,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { useExtractionSettings } from "@/hooks/useExtractionSettings";
 import { Badge } from "@/components/ui/badge";
 import { getDriverColor } from "@/lib/driverColors";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-
-type ExtractedTrip = {
-  member_name: string;
-  trip_number: string;
-  pickup_time: string;
-  dropoff_time: string;
-  mileage: number | null;
-  pickup_address?: string;
-  dropoff_address?: string;
-  trip_id_reference?: string;
-};
-
-type ReviewTrip = ExtractedTrip & {
-  review_reason: string;
-};
-
-type SkippedTrip = {
-  member_name: string;
-  trip_number: string;
-  reason: string;
-};
-
-type ExtractionResult = {
-  driver_name: string;
-  date: string;
-  trips: ExtractedTrip[];
-  review?: ReviewTrip[];
-  skipped?: SkippedTrip[];
-};
+import { extractWithOllama, extractWithCloud, type ExtractionResult, type ExtractedTrip, type ReviewTrip, type SkippedTrip } from "@/lib/extraction";
 
 type ImageStatus = "pending" | "extracting" | "success" | "error";
 
@@ -142,22 +112,29 @@ export default function ExtractTrips() {
 
   const extractSingle = async (image: BatchImage): Promise<BatchImage> => {
     try {
-      const { data, error } = await supabase.functions.invoke("extract-trips", {
-        body: {
-          imageBase64: image.preview,
-          provider: settings.provider,
-          cloudProvider: settings.cloudProvider,
-          cloudModel: settings.cloudModel,
-          apiKey: settings.apiKeys[settings.cloudProvider],
-          ollamaUrl: settings.ollamaUrl,
-          ollamaModel: settings.ollamaModel,
-        },
-      });
+      let result: ExtractionResult;
 
-      if (error) throw new Error(error.message);
-      if (data.error) throw new Error(data.error);
+      if (settings.provider === "local") {
+        // Call Ollama directly from browser
+        result = await extractWithOllama(
+          image.preview,
+          settings.ollamaUrl,
+          settings.ollamaModel
+        );
+      } else {
+        // Use cloud API via edge function
+        const apiKey = settings.apiKeys[settings.cloudProvider];
+        if (!apiKey) {
+          throw new Error(`API key required for ${settings.cloudProvider}. Configure it in Settings.`);
+        }
+        result = await extractWithCloud(
+          image.preview,
+          settings.cloudProvider,
+          settings.cloudModel,
+          apiKey
+        );
+      }
 
-      const result = data as ExtractionResult;
       const reviewTrips = result.review ?? [];
       const tripEdits: Record<number, Partial<ExtractedTrip>> = {};
       result.trips.forEach((t, i) => {
