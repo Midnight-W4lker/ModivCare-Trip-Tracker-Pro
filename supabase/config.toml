@@ -1,0 +1,4 @@
+project_id = "lvdlisnvsgiqhhwqcsue"
+
+[functions.extract-trips]
+verify_jwt = false
