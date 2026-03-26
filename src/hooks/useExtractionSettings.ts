@@ -12,7 +12,7 @@ export interface ExtractionSettings {
 const STORAGE_KEY = "extraction-settings";
 
 const DEFAULTS: ExtractionSettings = {
-  provider: "local",
+  provider: "cloud",
   cloudModel: "google/gemini-2.5-flash",
   ollamaUrl: "http://localhost:11434",
   ollamaModel: "qwen2.5vl:7b",
