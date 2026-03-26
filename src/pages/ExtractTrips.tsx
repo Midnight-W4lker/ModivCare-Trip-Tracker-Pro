@@ -146,7 +146,9 @@ export default function ExtractTrips() {
         body: {
           imageBase64: image.preview,
           provider: settings.provider,
+          cloudProvider: settings.cloudProvider,
           cloudModel: settings.cloudModel,
+          apiKey: settings.apiKeys[settings.cloudProvider],
           ollamaUrl: settings.ollamaUrl,
           ollamaModel: settings.ollamaModel,
         },

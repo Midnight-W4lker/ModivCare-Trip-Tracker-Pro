@@ -11,9 +11,11 @@ import {
 } from "@/components/ui/select";
 import {
   useExtractionSettings,
+  CLOUD_PROVIDERS,
   CLOUD_MODELS,
   LOCAL_MODELS,
   type AIProvider,
+  type CloudProvider,
 } from "@/hooks/useExtractionSettings";
 import { useOllamaStatus } from "@/hooks/useOllamaStatus";
 import {
@@ -29,6 +31,9 @@ import {
   Monitor,
   CircleDot,
   Zap,
+  Key,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -43,9 +48,14 @@ function formatBytes(bytes: number): string {
 }
 
 export default function Settings() {
-  const { settings, updateSettings } = useExtractionSettings();
+  const { settings, updateSettings, updateApiKey } = useExtractionSettings();
   const [testStatus, setTestStatus] = useState<"idle" | "testing" | "ok" | "fail">("idle");
   const [customModel, setCustomModel] = useState("");
+  const [showApiKey, setShowApiKey] = useState<Record<CloudProvider, boolean>>({
+    openai: false,
+    google: false,
+    anthropic: false,
+  });
 
   const ollama = useOllamaStatus(settings.ollamaUrl, settings.provider === "local");
 
@@ -95,6 +105,13 @@ export default function Settings() {
   const isModelLoaded = (name: string) =>
     ollama.loadedModels.some((m) => m.name === name);
 
+  const toggleShowApiKey = (provider: CloudProvider) => {
+    setShowApiKey((prev) => ({ ...prev, [provider]: !prev[provider] }));
+  };
+
+  const currentCloudModels = CLOUD_MODELS[settings.cloudProvider] || [];
+  const currentApiKey = settings.apiKeys[settings.cloudProvider] || "";
+
   return (
     <DashboardLayout>
       <div className="space-y-6 max-w-2xl">
@@ -111,8 +128,8 @@ export default function Settings() {
             <h3 className="font-semibold text-sm">AI Provider</h3>
             <div className="grid grid-cols-2 gap-3">
               {([
-                { key: "local" as AIProvider, icon: Server, title: "Local Ollama", desc: "Self-hosted models" },
-                { key: "cloud" as AIProvider, icon: Cloud, title: "Cloud AI", desc: "Lovable AI Gateway" },
+                { key: "local" as AIProvider, icon: Server, title: "Local Ollama", desc: "Self-hosted models (recommended)" },
+                { key: "cloud" as AIProvider, icon: Cloud, title: "Cloud AI", desc: "OpenAI, Google, Anthropic" },
               ]).map((opt) => (
                 <button
                   key={opt.key}
@@ -136,21 +153,96 @@ export default function Settings() {
 
         {/* Cloud Settings */}
         {settings.provider === "cloud" && (
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+            {/* Cloud Provider Selection */}
             <div className="bg-card border border-border rounded-xl p-5 space-y-4" style={{ boxShadow: "var(--shadow-card)" }}>
-              <h3 className="font-semibold text-sm">Cloud Model</h3>
+              <h3 className="font-semibold text-sm">Cloud Provider</h3>
+              <div className="grid grid-cols-3 gap-2">
+                {CLOUD_PROVIDERS.map((p) => (
+                  <button
+                    key={p.value}
+                    onClick={() => updateSettings({ cloudProvider: p.value })}
+                    className={`p-3 rounded-lg border-2 transition-all text-center ${
+                      settings.cloudProvider === p.value
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-muted-foreground/30"
+                    }`}
+                  >
+                    <div className="font-medium text-sm">{p.label}</div>
+                    <div className="text-xs text-muted-foreground">{p.description}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* API Key Configuration */}
+            <div className="bg-card border border-border rounded-xl p-5 space-y-4" style={{ boxShadow: "var(--shadow-card)" }}>
+              <div className="flex items-center gap-2">
+                <Key className="h-4 w-4 text-primary" />
+                <h3 className="font-semibold text-sm">API Key</h3>
+              </div>
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      type={showApiKey[settings.cloudProvider] ? "text" : "password"}
+                      value={currentApiKey}
+                      onChange={(e) => updateApiKey(settings.cloudProvider, e.target.value)}
+                      placeholder={`Enter your ${CLOUD_PROVIDERS.find(p => p.value === settings.cloudProvider)?.label} API key`}
+                      className="font-mono text-sm pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleShowApiKey(settings.cloudProvider)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showApiKey[settings.cloudProvider] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {settings.cloudProvider === "google" && (
+                    <>Get your API key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Google AI Studio</a></>
+                  )}
+                  {settings.cloudProvider === "openai" && (
+                    <>Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">OpenAI Platform</a></>
+                  )}
+                  {settings.cloudProvider === "anthropic" && (
+                    <>Get your API key from <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Anthropic Console</a></>
+                  )}
+                </p>
+                {!currentApiKey && (
+                  <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 bg-amber-500/10 px-3 py-2 rounded-lg">
+                    <XCircle className="h-4 w-4" />
+                    <span className="text-xs">API key required for cloud extraction</span>
+                  </div>
+                )}
+                {currentApiKey && (
+                  <div className="flex items-center gap-2 text-green-600 dark:text-green-400 bg-green-500/10 px-3 py-2 rounded-lg">
+                    <CheckCircle className="h-4 w-4" />
+                    <span className="text-xs">API key configured</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Cloud Model Selection */}
+            <div className="bg-card border border-border rounded-xl p-5 space-y-4" style={{ boxShadow: "var(--shadow-card)" }}>
+              <h3 className="font-semibold text-sm">Model</h3>
               <Select value={settings.cloudModel} onValueChange={(v) => updateSettings({ cloudModel: v })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {CLOUD_MODELS.map((m) => (
+                  {currentCloudModels.map((m) => (
                     <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Gemini 2.5 Flash recommended for best speed/accuracy balance on OCR tasks.
+                {settings.cloudProvider === "google" && "Gemini 2.0 Flash recommended for best speed/accuracy balance."}
+                {settings.cloudProvider === "openai" && "GPT-4o recommended for best vision capabilities."}
+                {settings.cloudProvider === "anthropic" && "Claude Sonnet 4 recommended for best OCR accuracy."}
               </p>
             </div>
           </motion.div>
